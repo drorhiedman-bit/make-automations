@@ -4,7 +4,7 @@ Make.com scenarios built for lesson 5 (Make + databases), exported as Blueprint 
 
 ## Dairy heat stress alert
 
-`dairy-heat-stress-alert.blueprint.json`
+[`blueprints/dairy-heat-stress-alert.blueprint.json`](blueprints/dairy-heat-stress-alert.blueprint.json)
 
 Every day at 18:00 (Asia/Jerusalem) the scenario checks tomorrow's weather forecast for a dairy farm, calculates heat stress (THI), and alerts the farmer only when action is needed.
 
