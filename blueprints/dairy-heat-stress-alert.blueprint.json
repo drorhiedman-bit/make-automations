@@ -1,0 +1,324 @@
+{
+  "name": "Dairy heat stress alert",
+  "flow": [
+    {
+      "id": 1,
+      "mapper": {
+        "url": "https://api.open-meteo.com/v1/forecast",
+        "method": "get",
+        "timeout": "40",
+        "shareCookies": false,
+        "parseResponse": true,
+        "allowRedirects": true,
+        "queryParameters": [
+          {
+            "name": "longitude",
+            "value": "35.20"
+          },
+          {
+            "name": "daily",
+            "value": "temperature_2m_max,relative_humidity_2m_min,temperature_2m_min,relative_humidity_2m_max"
+          },
+          {
+            "name": "latitude",
+            "value": "32.61"
+          },
+          {
+            "name": "timezone",
+            "value": "Asia/Jerusalem"
+          },
+          {
+            "name": "forecast_days",
+            "value": "2"
+          }
+        ],
+        "stopOnHttpError": true,
+        "requestCompressedContent": true
+      },
+      "module": "http:MakeRequest",
+      "version": 4,
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "tlsType": "",
+        "authenticationType": "noAuth"
+      }
+    },
+    {
+      "id": 2,
+      "mapper": {
+        "variables": [
+          {
+            "name": "tMax",
+            "value": "{{get(1.data.daily.temperature_2m_max; 2)}}"
+          },
+          {
+            "name": "rhMin",
+            "value": "{{get(1.data.daily.relative_humidity_2m_min; 2)}}"
+          },
+          {
+            "name": "tMin",
+            "value": "{{get(1.data.daily.temperature_2m_min; 2)}}"
+          },
+          {
+            "name": "rhMax",
+            "value": "{{get(1.data.daily.relative_humidity_2m_max; 2)}}"
+          },
+          {
+            "name": "dayTHI",
+            "value": "{{round(((1.8 * get(1.data.daily.temperature_2m_max; 2) + 32) - (0.55 - 0.0055 * get(1.data.daily.relative_humidity_2m_min; 2)) * (1.8 * get(1.data.daily.temperature_2m_max; 2) - 26)) * 10) / 10}}"
+          },
+          {
+            "name": "nightTHI",
+            "value": "{{round(((1.8 * get(1.data.daily.temperature_2m_min; 2) + 32) - (0.55 - 0.0055 * get(1.data.daily.relative_humidity_2m_max; 2)) * (1.8 * get(1.data.daily.temperature_2m_min; 2) - 26)) * 10) / 10}}"
+          }
+        ]
+      },
+      "module": "util:SetVariables",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      },
+      "parameters": {}
+    },
+    {
+      "id": 3,
+      "mapper": {
+        "variables": [
+          {
+            "name": "ruleTriggered",
+            "value": "{{if(2.tMin >= 20; if(2.dayTHI >= 72; \"night + day\"; \"night\"); if(2.dayTHI >= 72; \"day\"; \"none\"))}}"
+          },
+          {
+            "name": "level",
+            "value": "{{if(2.dayTHI >= 80; \"severe\"; if(2.tMin >= 20; if(2.dayTHI >= 72; \"severe\"; \"moderate\"); if(2.dayTHI >= 72; \"moderate\"; if(2.dayTHI >= 68; \"mild\"; \"none\"))))}}"
+          },
+          {
+            "name": "showers",
+            "value": "{{if(2.tMin >= 20; \"כן\"; \"לא\")}}"
+          },
+          {
+            "name": "fans",
+            "value": "{{if(2.dayTHI >= 72; \"כן\"; \"לא\")}}"
+          },
+          {
+            "name": "forecastDate",
+            "value": "{{formatDate(parseDate(get(1.data.daily.time; 2); \"YYYY-MM-DD\"); \"DD/MM\")}}"
+          }
+        ]
+      },
+      "module": "util:SetVariables",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      "parameters": {}
+    },
+    {
+      "id": 8,
+      "mapper": null,
+      "module": "builtin:BasicRouter",
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 9,
+              "filter": {
+                "name": "Alert",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{3.ruleTriggered}}",
+                      "b": "none",
+                      "o": "text:notequal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "input": "אתה יועץ לרפת חלב במושב היוגב. ההודעה נשלחת בערב ומתייחסת למחר, {{3.forecastDate}}.\nנתוני מחר: מקסימום {{2.tMax}} מעלות, לחות מינימלית {{2.rhMin}}%, THI יום {{2.dayTHI}}. מינימום בלילה {{2.tMin}} מעלות.\nההחלטות כבר התקבלו לפי כללי המשק ואסור לשנות אותן:\nמקלחות וטפטפות: {{3.showers}} (מפעילים רק כשמינימום הלילה 20 מעלות ומעלה).\nמאווררים: {{3.fans}} (מפעילים כש-THI יום 72 ומעלה).\nכתוב לרפתן הודעה בעברית, עד 4 שורות קצרות: מה צפוי מחר, מה מפעילים ומה לא, והמלצה אחת על מים או שעות חליבה. אם מקלחות = לא, כתוב במפורש שלא מפעילים מקלחות וטפטפות כי הלילה קריר. בלי הקדמות ובלי סימני עיצוב.\nכתוב בעברית בלבד, בלי אף מילה באנגלית, חוץ מהקיצור THI."
+              },
+              "module": "ai-tools:Ask",
+              "version": 2,
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": -150
+                }
+              },
+              "parameters": {
+                "model": "small",
+                "makeConnectionId": null
+              }
+            },
+            {
+              "id": 11,
+              "mapper": {
+                "text": "🐄 התראת עומס חום למחר {{3.forecastDate}}\n{{9.answer}}",
+                "chatId": "<YOUR_TELEGRAM_CHAT_ID>",
+                "parseMode": ""
+              },
+              "module": "telegram:SendReplyMessage",
+              "version": 1,
+              "metadata": {
+                "designer": {
+                  "x": 1500,
+                  "y": -150
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": null
+              }
+            },
+            {
+              "id": 12,
+              "mapper": {
+                "to": [
+                  "<RECIPIENT_EMAIL>"
+                ],
+                "content": "<div dir=\"rtl\" style=\"white-space:pre-line;font-family:Arial,sans-serif;font-size:15px\">{{9.answer}}</div>",
+                "subject": "🐄 התראת עומס חום למחר {{3.forecastDate}}",
+                "bodyType": "rawHtml"
+              },
+              "module": "google-email:sendAnEmail",
+              "version": 4,
+              "metadata": {
+                "designer": {
+                  "x": 1800,
+                  "y": -150
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": null
+              }
+            },
+            {
+              "id": 13,
+              "mapper": {
+                "base": "<AIRTABLE_BASE_ID>",
+                "table": "<AIRTABLE_TABLE_ID>",
+                "typecast": false,
+                "useColumnId": false,
+                "record": {
+                  "Date": "{{get(1.data.daily.time; 2)}}",
+                  "Max temp C": "{{2.tMax}}",
+                  "Min humidity %": "{{2.rhMin}}",
+                  "Day THI": "{{2.dayTHI}}",
+                  "Min temp C": "{{2.tMin}}",
+                  "Max humidity %": "{{2.rhMax}}",
+                  "Night THI": "{{2.nightTHI}}",
+                  "Rule triggered": "{{3.ruleTriggered}}",
+                  "Level": "{{3.level}}",
+                  "Showers": "{{2.tMin >= 20}}",
+                  "Fans": "{{2.dayTHI >= 72}}",
+                  "Alert sent": true,
+                  "Recommendation": "{{9.answer}}",
+                  "Run at": "{{now}}"
+                }
+              },
+              "module": "airtable:ActionCreateRecord",
+              "version": 3,
+              "metadata": {
+                "designer": {
+                  "x": 2100,
+                  "y": -150
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": null
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 14,
+              "filter": {
+                "name": "No alert",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{3.ruleTriggered}}",
+                      "b": "none",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "base": "<AIRTABLE_BASE_ID>",
+                "table": "<AIRTABLE_TABLE_ID>",
+                "typecast": false,
+                "useColumnId": false,
+                "record": {
+                  "Date": "{{get(1.data.daily.time; 2)}}",
+                  "Max temp C": "{{2.tMax}}",
+                  "Min humidity %": "{{2.rhMin}}",
+                  "Day THI": "{{2.dayTHI}}",
+                  "Min temp C": "{{2.tMin}}",
+                  "Max humidity %": "{{2.rhMax}}",
+                  "Night THI": "{{2.nightTHI}}",
+                  "Rule triggered": "{{3.ruleTriggered}}",
+                  "Level": "{{3.level}}",
+                  "Showers": "{{2.tMin >= 20}}",
+                  "Fans": "{{2.dayTHI >= 72}}",
+                  "Alert sent": false,
+                  "Run at": "{{now}}"
+                }
+              },
+              "module": "airtable:ActionCreateRecord",
+              "version": 3,
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": 150
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": null
+              }
+            }
+          ]
+        }
+      ],
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "eu1.make.com",
+    "notes": "Schedule: daily 18:00 Asia/Jerusalem. Secrets, emails and IDs redacted for the public repo. Reconnect Telegram, Gmail, Airtable and Make AI Provider after import."
+  }
+}
